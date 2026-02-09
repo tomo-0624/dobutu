@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI どうぶつパーク・コミュニケーション</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+JP:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f0f9ff; 
+            color: #334155;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .dela { font-family: 'Dela Gothic One', cursive; }
+
+        .main-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            max-width: 500px;
+            margin: 0 auto;
+            background: linear-gradient(180deg, #f0fff4 0%, #e0f2fe 100%);
+            position: relative;
+            box-shadow: 0 0 40px rgba(0,0,0,0.1);
+        }
+
+        .animal-display {
+            flex: 1.2;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 15px 20px;
+        }
+
+        .animal-img-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 48px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            border: 6px solid white;
+            z-index: 10;
+            background-color: #f1f5f9; 
+        }
+
+        .animal-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.8s ease-in-out, transform 0.5s ease;
+            opacity: 0; 
+        }
+
+        .animal-img.loaded { opacity: 1; }
+        .animal-img.zoom { transform: scale(1.05); }
+
+        .chat-history {
+            flex: 0.7;
+            margin: 5px 20px;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 28px;
+            border: 1px solid rgba(255,255,255,0.8);
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .history-item {
+            animation: slideIn 0.3s ease-out forwards;
+            padding: 10px 14px;
+            border-radius: 18px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .history-ai { background: #f8fafc; color: #64748b; border: 1px solid #f1f5f9; }
+        .history-animal { background: #f0fdf4; color: #166534; border: 1px solid #dcfce7; font-weight: bold; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        #chatOverlay { z-index: 100; pointer-events: none; }
+        .bubble {
+            background: #ffffff;
+            color: #0f172a;
+            padding: 18px 24px;
+            border-radius: 30px;
+            font-weight: 800;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 85%;
+            border: 3px solid #10b981;
+            animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: auto;
+            text-align: center;
+        }
+
+        @keyframes pop {
+            from { opacity: 0; transform: scale(0.8) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .loading-overlay { 
+            background: rgba(255, 255, 255, 0.95); 
+            z-index: 60; 
+            transition: opacity 0.5s; 
+        }
+        
+        .float-anim { animation: float 2s ease-in-out infinite; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 24px;
+            padding: 12px 20px;
+            margin: 0 20px 10px 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            z-index: 20;
+        }
+
+        .input-area {
+            padding: 15px 20px 30px 20px;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            z-index: 30;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .animal-selector-btn {
+            transition: all 0.2s;
+            filter: grayscale(1);
+            opacity: 0.6;
+        }
+        .animal-selector-btn.active {
+            filter: grayscale(0);
+            opacity: 1;
+            transform: scale(1.1);
+            border-color: #10b981;
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <header class="p-4 flex justify-between items-center">
+        <h1 class="dela text-lg text-emerald-600 tracking-tighter">AI ANIMAL PARK</h1>
+        <div id="animalSelector" class="flex gap-2">
+            <button onclick="changeAnimal('ライオン', '🦁')" class="animal-selector-btn active w-10 h-10 flex items-center justify-center bg-white border-2 rounded-full" id="btn-lion">🦁</button>
+            <button onclick="changeAnimal('ペンギン', '🐧')" class="animal-selector-btn w-10 h-10 flex items-center justify-center bg-white border-2 rounded-full" id="btn-penguin">🐧</button>
+            <button onclick="changeAnimal('カピバラ', '🌿')" class="animal-selector-btn w-10 h-10 flex items-center justify-center bg-white border-2 rounded-full" id="btn-capybara">🌿</button>
+            <button onclick="changeAnimal('パンダ', '🐼')" class="animal-selector-btn w-10 h-10 flex items-center justify-center bg-white border-2 rounded-full" id="btn-panda">🐼</button>
+        </div>
+    </header>
+
+    <div class="animal-display">
+        <div id="chatOverlay" class="absolute inset-0 z-[100] flex items-center justify-center p-6"></div>
+        
+        <div class="animal-img-wrapper relative">
+            <div id="loader" class="absolute inset-0 loading-overlay flex flex-col items-center justify-center text-center p-8">
+                <div id="loadingEmoji" class="float-anim text-6xl mb-6">🦁</div>
+                <div class="space-y-2">
+                    <p id="loadingMsg" class="dela text-emerald-600 text-lg">パークを探索中...</p>
+                </div>
+            </div>
+            <img id="animalImg" src="" alt="Animal" class="animal-img">
+            <div class="absolute bottom-4 left-4 z-10">
+                <div class="bg-black/40 backdrop-blur-md px-4 py-1.5 rounded-2xl border border-white/20 shadow-xl">
+                    <h2 id="speciesLabel" class="dela text-xs text-white tracking-widest uppercase">LION</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="historyArea" class="chat-history no-scrollbar">
+        <div class="history-item history-ai">
+            パークへようこそ！どの動物に会いに行きますか？
+        </div>
+    </div>
+
+    <div class="status-card flex gap-4">
+        <div class="flex-1">
+            <div class="flex justify-between items-end mb-1">
+                <span class="dela text-[9px] text-slate-400">FRIENDLY</span>
+                <span id="friendlyVal" class="dela text-[10px] text-emerald-500">50%</span>
+            </div>
+            <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div id="friendlyBar" class="h-full bg-emerald-400 transition-all duration-1000" style="width: 50%"></div>
+            </div>
+        </div>
+        <div class="flex-1">
+            <div class="flex justify-between items-end mb-1">
+                <span class="dela text-[9px] text-slate-400">SATISFACTION</span>
+                <span id="satisVal" class="dela text-[10px] text-blue-500">50%</span>
+            </div>
+            <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div id="satisBar" class="h-full bg-blue-400 transition-all duration-1000" style="width: 50%"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="flex gap-2">
+            <input type="text" id="userInput" placeholder="なにか話しかけてみて..." 
+                class="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-3 font-bold text-slate-700 focus:outline-none focus:border-emerald-200 text-sm transition-all">
+            <button id="sendBtn" class="bg-emerald-500 text-white w-14 h-14 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-emerald-100">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+            </button>
+        </div>
+        
+        <div class="flex gap-2 mt-4 overflow-x-auto no-scrollbar pb-1">
+            <button onclick="quickAction('肉')" class="shrink-0 px-5 py-2.5 bg-rose-50 border border-rose-100 rounded-xl text-[11px] font-black text-rose-500 shadow-sm">🍖 肉をあげる</button>
+            <button onclick="quickAction('雑草')" class="shrink-0 px-5 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] font-black text-emerald-600 shadow-sm">🌿 雑草をあげる</button>
+            <button onclick="quickAction('魚')" class="shrink-0 px-5 py-2.5 bg-sky-50 border border-sky-100 rounded-xl text-[11px] font-black text-sky-600 shadow-sm">🐟 魚をあげる</button>
+            <button onclick="quickAction('石')" class="shrink-0 px-5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-black text-slate-600 shadow-sm">🪨 石を投げる？</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    const apiKey = ""; 
+
+    const el = {
+        img: document.getElementById('animalImg'),
+        input: document.getElementById('userInput'),
+        btn: document.getElementById('sendBtn'),
+        loader: document.getElementById('loader'),
+        loadingMsg: document.getElementById('loadingMsg'),
+        loadingEmoji: document.getElementById('loadingEmoji'),
+        species: document.getElementById('speciesLabel'),
+        friendlyBar: document.getElementById('friendlyBar'),
+        friendlyVal: document.getElementById('friendlyVal'),
+        satisBar: document.getElementById('satisBar'),
+        satisVal: document.getElementById('satisVal'),
+        chat: document.getElementById('chatOverlay'),
+        history: document.getElementById('historyArea')
+    };
+
+    let state = {
+        currentAnimal: "ライオン",
+        emoji: "🦁",
+        friendly: 50,
+        satisfaction: 50
+    };
+
+    const systemPrompt = `あなたは「AI どうぶつパーク」のガイド兼、動物たちの心を通訳するAIです。
+    ユーザーが「ライオン」「ペンギン」「カピバラ」「パンダ」のいずれかと接しています。
+    与えられた「アイテム/行動」に対して、動物の反応をJSONで返してください。
+
+    【ルール】
+    1. 性格設定:
+       - ライオン: プライドが高く、肉が好き。石は怒る。
+       - ペンギン: クールだが魚には目がない。
+       - カピバラ: 常にのんびり。雑草を好む。
+       - パンダ: マイペース。遊び好き。
+    2. 画像生成プロンプト: その瞬間の動物の様子を英語で詳細に記述(English)。
+
+    【出力JSON形式】
+    {
+        "aiCommentary": "ガイドの解説(短く1文)",
+        "imagePrompt": "Detailed English prompt for high-quality animal photo",
+        "friendlyChange": 数値(-20〜20),
+        "satisChange": 数値(-20〜20),
+        "reaction": "動物の鳴き声や心の声(セリフ)"
+    }`;
+
+    async function fetchWithRetry(url, options, retries = 5) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(url, options);
+                if (res.ok) return await res.json();
+                await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+            } catch (e) {
+                if (i === retries - 1) throw e;
+                await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+            }
+        }
+    }
+
+    async function generateImage(prompt) {
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+            const data = await fetchWithRetry(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instances: [{ prompt: `High-quality wildlife photography, national geographic style, ${prompt}, natural environment, soft sunlight` }],
+                    parameters: { sampleCount: 1 }
+                })
+            });
+
+            if (data.predictions?.[0]?.bytesBase64Encoded) {
+                el.img.src = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+                el.img.onload = () => {
+                    el.img.classList.add('loaded');
+                    el.loader.classList.add('hidden');
+                };
+            }
+        } catch (e) {
+            console.error(e);
+            el.loader.classList.add('hidden');
+        }
+    }
+
+    function addHistory(text, type) {
+        const item = document.createElement('div');
+        item.className = `history-item ${type === 'ai' ? 'history-ai' : 'history-animal'}`;
+        item.innerText = `${type === 'ai' ? 'Guide: ' : state.emoji + ' '}${text}`;
+        el.history.appendChild(item);
+        el.history.scrollTop = el.history.scrollHeight;
+    }
+
+    async function handleAction(actionText) {
+        if (!actionText || !el.loader.classList.contains('hidden')) return;
+        
+        el.input.value = "";
+        el.loader.classList.remove('hidden');
+        el.img.classList.remove('loaded');
+        el.loadingMsg.innerText = `${state.currentAnimal}の反応を見ています...`;
+
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const data = await fetchWithRetry(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: `動物: ${state.currentAnimal}, アイテム/行動: ${actionText}, 現在の状態: ${JSON.stringify(state)}` }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: { responseMimeType: "application/json" }
+                })
+            });
+
+            const result = JSON.parse(data.candidates[0].content.parts[0].text);
+            
+            addHistory(result.aiCommentary, 'ai');
+            addHistory(result.reaction, 'animal');
+
+            await generateImage(result.imagePrompt);
+
+            state.friendly = Math.min(100, Math.max(0, state.friendly + result.friendlyChange));
+            state.satisfaction = Math.min(100, Math.max(0, state.satisfaction + result.satisChange));
+            
+            updateUI();
+            showBubble(result.reaction);
+        } catch (e) {
+            console.error(e);
+            el.loader.classList.add('hidden');
+            el.img.classList.add('loaded');
+        }
+    }
+
+    function updateUI() {
+        el.species.innerText = state.currentAnimal.toUpperCase();
+        el.friendlyBar.style.width = `${state.friendly}%`;
+        el.friendlyVal.innerText = `${state.friendly}%`;
+        el.satisBar.style.width = `${state.satisfaction}%`;
+        el.satisVal.innerText = `${state.satisfaction}%`;
+    }
+
+    function showBubble(text) {
+        const b = document.createElement('div');
+        b.className = 'bubble';
+        b.innerText = text;
+        el.chat.innerHTML = '';
+        el.chat.appendChild(b);
+        setTimeout(() => { if(b) b.style.opacity = '0'; }, 3500);
+    }
+
+    window.changeAnimal = (name, emoji) => {
+        if (state.currentAnimal === name) return;
+        state.currentAnimal = name;
+        state.emoji = emoji;
+        el.loadingEmoji.innerText = emoji;
+        
+        // UI更新
+        document.querySelectorAll('.animal-selector-btn').forEach(b => b.classList.remove('active'));
+        const btnId = name === 'ライオン' ? 'btn-lion' : name === 'ペンギン' ? 'btn-penguin' : name === 'カピバラ' ? 'btn-capybara' : 'btn-panda';
+        document.getElementById(btnId).classList.add('active');
+
+        // 初期化リクエスト
+        handleAction("挨拶する");
+    };
+
+    window.quickAction = (val) => handleAction(val);
+    el.btn.onclick = () => handleAction(el.input.value);
+    el.input.onkeypress = (e) => e.key === 'Enter' && handleAction(el.input.value);
+
+    window.onload = () => {
+        const initialPrompt = "Majestic lion sitting in the savanna, looking at the camera, beautiful golden hour lighting";
+        generateImage(initialPrompt);
+        setTimeout(() => {
+            showBubble("ガオーッ！よく来たな。");
+            el.loader.classList.add('hidden');
+        }, 2000);
+    };
+</script>
+
+</body>
+</html>
